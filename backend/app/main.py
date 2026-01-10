@@ -31,15 +31,26 @@ def read_ingredients(db: Session = Depends(get_db)):
     return crud.get_ingredients(db)
 
 # --- User Ingredients CRUD ---
-@app.post("/users/{user_id}/ingredients/", response_model=schemas.UserIngredient)
-def add_user_ingredient(user_id: int, ui: schemas.UserIngredientCreate, db: Session = Depends(get_db)):
-    """Add a new ingredient to a user."""
+@app.post("/users/{user_id}/ingredients/", response_model=schemas.UserIngredientOut)
+def add_user_ingredient_endpoint(user_id: int, ui: schemas.UserIngredientCreate, db: Session = Depends(get_db)):
+    """Add a new ingredient to a user's fridge."""
     return crud.add_user_ingredient(db, user_id, ui)
 
-@app.get("/users/{user_id}/ingredients/", response_model=list[schemas.UserIngredient])
-def get_user_ingredients(user_id: int, db: Session = Depends(get_db)):
+@app.get("/users/{user_id}/ingredients/", response_model=list[schemas.UserIngredientOut])
+def get_user_ingredients_endpoint(user_id: int, db: Session = Depends(get_db)):
     """Get all ingredients for a user."""
     return crud.get_user_ingredients(db, user_id)
+
+@app.put("/users/{user_id}/ingredients/{ingredient_id}/", response_model=schemas.UserIngredientOut)
+def update_user_ingredient_endpoint(
+    user_id: int,
+    ingredient_id: int,
+    data: schemas.UserIngredientUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update quantity or expiry date of a user's ingredient."""
+    return crud.update_user_ingredient(db, user_id, ingredient_id, data)
+
 
 # --- Root endpoint ---
 @app.get("/")
