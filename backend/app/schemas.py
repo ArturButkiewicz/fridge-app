@@ -4,7 +4,7 @@ from typing import List, Optional
 
 class IngredientBase(BaseModel):
     name: str
-    default_shelf_life_days: int = 7
+    default_shelf_life_days: int
 
 class IngredientCreate(IngredientBase):
     pass
@@ -34,8 +34,8 @@ class UserUpdate(BaseModel):
 
 class UserIngredientBase(BaseModel):
     ingredient_id: int
-    quantity: int = 1
-    expiry_date: Optional[date]
+    quantity: int
+    expiry_date: Optional[date] = None
 
 class UserIngredientCreate(UserIngredientBase):
     pass
@@ -67,3 +67,8 @@ class IngredientUpdate(BaseModel):
     name: str
     default_shelf_life_days: int
 
+class IngredientOut(IngredientBase):
+    id: int
+
+    class Config:
+        orm_mode = True

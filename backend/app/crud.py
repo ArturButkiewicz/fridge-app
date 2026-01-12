@@ -6,7 +6,11 @@ from app import models
 
 # ---- Ingredients ----
 def create_ingredient(db: Session, ingredient: schemas.IngredientCreate):
-    db_item = models.Ingredient(**ingredient.dict())
+    shelf_life = ingredient.default_shelf_life_days or 7
+    db_item = models.Ingredient(
+        name=ingredient.name,
+        default_shelf_life_days=shelf_life
+    )
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
@@ -14,6 +18,36 @@ def create_ingredient(db: Session, ingredient: schemas.IngredientCreate):
 
 def get_ingredients(db: Session):
     return db.query(models.Ingredient).all()
+
+def get_ingredient(db: Session, ingredient_id: int):
+    return db.query(models.Ingredient)\
+             .filter(models.Ingredient.id == ingredient_id)\
+             .first()
+
+def update_ingredient(
+    db: Session,
+    ingredient_id: int,
+    ingredient: schemas.IngredientUpdate
+):
+    db_item = get_ingredient(db, ingredient_id)
+    if not db_item:
+        return None
+
+    for field, value in ingredient.dict(exclude_unset=True).items():
+        setattr(db_item, field, value)
+
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+def delete_ingredient(db: Session, ingredient_id: int):
+    db_item = get_ingredient(db, ingredient_id)
+    if not db_item:
+        return None
+
+    db.delete(db_item)
+    db.commit()
+    return True
 
 # ---- Users ----
 def create_user(db: Session, user: schemas.UserCreate):
@@ -53,25 +87,52 @@ def get_users(db: Session):
 
 # ---- User Ingredients ----
 def add_user_ingredient(db: Session, user_id: int, ui: schemas.UserIngredientCreate):
-    if ui.expiry_date is None:
-        ingredient = db.query(models.Ingredient).filter(models.Ingredient.id == ui.ingredient_id).first()
-        if not ingredient:
-            raise HTTPException(status_code=404, detail="Ingredient not found")
-        ui.expiry_date = datetime.today() + timedelta(days=ingredient.default_shelf_life_days)
-    db_ui = models.UserIngredient(user_id=user_id, **ui.dict())
+    ingredient = (
+        db.query(models.Ingredient)
+        .filter(models.Ingredient.id == ui.ingredient_id)
+        .first()
+    )
+    if not ingredient:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    existing = (
+        db.query(models.UserIngredient)
+        .filter(
+            models.UserIngredient.user_id == user_id,
+            models.UserIngredient.ingredient_id == ui.ingredient_id
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Ingredient already exists in user's fridge"
+        )
+    
+    quantity = ui.quantity if ui.quantity is not None else 1
+
+    if ui.expiry_date:
+        expiry_date = ui.expiry_date
+    else:
+        expiry_date = datetime.today().date() + timedelta(
+            days=ingredient.default_shelf_life_days
+        )
+    db_ui = models.UserIngredient(
+        user_id=user_id,
+        ingredient_id=ui.ingredient_id,
+        quantity=quantity,
+        expiry_date=expiry_date
+    )
     db.add(db_ui)
     db.commit()
     db.refresh(db_ui)
 
-    ui_out = schemas.UserIngredientOut(
+    return schemas.UserIngredientOut(
         id=db_ui.id,
         ingredient_id=db_ui.ingredient_id,
         quantity=db_ui.quantity,
         expiry_date=db_ui.expiry_date,
         ingredient_name=db_ui.ingredient.name
-        )
-    
-    return ui_out
+    )
 
 def get_user_ingredients(db: Session, user_id: int):
     user_ingredients = db.query(models.UserIngredient).filter(

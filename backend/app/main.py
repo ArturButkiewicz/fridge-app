@@ -20,15 +20,47 @@ def read_users(db: Session = Depends(get_db)):
     return crud.get_users(db)
 
 # --- Ingredients CRUD ---
-@app.post("/ingredients/", response_model=schemas.Ingredient)
-def create_ingredient(ingredient: schemas.IngredientCreate, db: Session = Depends(get_db)):
+@app.post("/ingredients/", response_model=schemas.IngredientOut)
+def create_ingredient_endpoint(
+    ingredient: schemas.IngredientCreate,
+    db: Session = Depends(get_db)):
     """Create a new ingredient."""
     return crud.create_ingredient(db, ingredient)
 
-@app.get("/ingredients/", response_model=list[schemas.Ingredient])
-def read_ingredients(db: Session = Depends(get_db)):
+@app.get("/ingredients/", response_model=list[schemas.IngredientOut])
+def list_ingredients(db: Session = Depends(get_db)):
     """Get all ingredients."""
     return crud.get_ingredients(db)
+
+@app.get("/ingredients/{ingredient_id}", response_model=schemas.IngredientOut)
+def get_ingredient_endpoint(
+    ingredient_id: int,
+    db: Session = Depends(get_db)
+):
+    item = crud.get_ingredient(db, ingredient_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return item
+
+@app.put("/ingredients/{ingredient_id}", response_model=schemas.IngredientOut)
+def update_ingredient_endpoint(
+    ingredient_id: int,
+    ingredient: schemas.IngredientUpdate,
+    db: Session = Depends(get_db)
+):
+    item = crud.update_ingredient(db, ingredient_id, ingredient)
+    if not item:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return item
+
+@app.delete("/ingredients/{ingredient_id}", status_code=204)
+def delete_ingredient_endpoint(
+    ingredient_id: int,
+    db: Session = Depends(get_db)
+):
+    ok = crud.delete_ingredient(db, ingredient_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
 
 # --- User Ingredients CRUD ---
 @app.post("/users/{user_id}/ingredients/", response_model=schemas.UserIngredientOut)
