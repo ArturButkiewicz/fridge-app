@@ -51,6 +51,16 @@ def update_user_ingredient_endpoint(
     """Update quantity or expiry date of a user's ingredient."""
     return crud.update_user_ingredient(db, user_id, ingredient_id, data)
 
+@app.delete(
+    "/users/{user_id}/ingredients/{ingredient_id}/",
+    status_code=204
+)
+def delete_user_ingredient_endpoint(
+    user_id: int,
+    ingredient_id: int,
+    db: Session = Depends(get_db)
+):
+    crud.delete_user_ingredient(db, user_id, ingredient_id)
 
 # --- Root endpoint ---
 @app.get("/")
