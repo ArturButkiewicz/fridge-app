@@ -1,6 +1,7 @@
 from uuid import uuid4
 
-from sqlalchemy import Column, Integer, String, Date, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, Text, Enum
+import enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -77,6 +78,10 @@ class Ingredient(Base):
 
 # RECIPES
 
+class RecipeType(str, enum.Enum):
+    internal = "internal"
+    external = "external"
+
 class Recipe(Base):
     __tablename__ = "recipes"
 
@@ -92,6 +97,8 @@ class Recipe(Base):
         back_populates="recipe",
         cascade="all, delete-orphan",
     )
+
+    recipe_type = Column(String, nullable=False)
 
     def __repr__(self):
         return f"<Recipe id={self.id} name={self.name}>"

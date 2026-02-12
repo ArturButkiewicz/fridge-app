@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Literal
 from uuid import UUID
 
 
@@ -77,9 +77,27 @@ class UserIngredientOut(BaseModel):
 
 class RecipeCreate(BaseModel):
     name: str
+    recipe_type: Literal["internal", "external"]
     description: Optional[str] = None
     instructions: Optional[str] = None
     external_url: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_by_type(self):
+        if self.recipe_type == "internal":
+            if not self.instructions:
+                raise ValueError("Internal recipe must have instructions")
+            if self.external_url:
+                raise ValueError("Internal recipe cannot have external_url")
+
+        elif self.recipe_type == "external":
+            if not self.external_url:
+                raise ValueError("External recipe must have external_url")
+            if self.instructions:
+                raise ValueError("External recipe cannot have instructions")
+
+        return self
+
 
 
 class RecipeUpdate(RecipeCreate):
@@ -100,6 +118,7 @@ class RecipeIngredientOut(BaseModel):
 class RecipeOut(BaseModel):
     id: UUID
     name: str
+    recipe_type: Literal["internal", "external"]
     description: Optional[str]
     instructions: Optional[str]
     external_url: Optional[str]
