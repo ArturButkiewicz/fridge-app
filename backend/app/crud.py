@@ -1,8 +1,11 @@
 from sqlalchemy.orm import Session
-from . import models, schemas
 from datetime import datetime, timedelta
 from fastapi import HTTPException
-from app import models
+from uuid import UUID
+
+from . import models, schemas
+from .models import Recipe, Ingredient, RecipeIngredient
+
 
 # ---- Ingredients ----
 def create_ingredient(db: Session, ingredient: schemas.IngredientCreate):
@@ -20,9 +23,10 @@ def get_ingredients(db: Session):
     return db.query(models.Ingredient).all()
 
 def get_ingredient(db: Session, ingredient_id: int):
-    return db.query(models.Ingredient)\
-             .filter(models.Ingredient.id == ingredient_id)\
-             .first()
+    ingredient = db.query(models.Ingredient).filter(models.Ingredient.id == ingredient_id).first()
+    if not ingredient:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return ingredient
 
 def update_ingredient(
     db: Session,
@@ -30,8 +34,6 @@ def update_ingredient(
     ingredient: schemas.IngredientUpdate
 ):
     db_item = get_ingredient(db, ingredient_id)
-    if not db_item:
-        return None
 
     for field, value in ingredient.dict(exclude_unset=True).items():
         setattr(db_item, field, value)
@@ -41,16 +43,18 @@ def update_ingredient(
     return db_item
 
 def delete_ingredient(db: Session, ingredient_id: int):
-    db_item = get_ingredient(db, ingredient_id)
-    if not db_item:
-        return None
-
-    db.delete(db_item)
+    ingredient = get_ingredient(db, ingredient_id) 
+    db.delete(ingredient)
     db.commit()
     return True
 
+
 # ---- Users ----
 def create_user(db: Session, user: schemas.UserCreate):
+    existing_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
     db_user = models.User(email=user.email)
     db.add(db_user)
     db.commit()
@@ -64,9 +68,15 @@ def get_user(db: Session, user_id: int):
     return user
 
 def update_user(db: Session, user_id: int, data: schemas.UserUpdate):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = get_user(db, user_id)
+
+    existing_user = (
+        db.query(models.User)
+        .filter(models.User.email == data.email, models.User.id != user_id)
+        .first()
+    )
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already in use")
 
     user.email = data.email
     db.commit()
@@ -74,13 +84,10 @@ def update_user(db: Session, user_id: int, data: schemas.UserUpdate):
     return user
 
 def delete_user(db: Session, user_id: int):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
+    user = get_user(db, user_id)
     db.delete(user)
     db.commit()
-    return user
+    return True
 
 def get_users(db: Session):
     return db.query(models.User).all()
@@ -150,32 +157,6 @@ def get_user_ingredients(db: Session, user_id: int):
         })
     return result
 
-def get_ingredient(db: Session, ingredient_id: int):
-    ingredient = db.query(models.Ingredient).filter(models.Ingredient.id == ingredient_id).first()
-    if not ingredient:
-        raise HTTPException(status_code=404, detail="Ingredient not found")
-    return ingredient
-
-def update_ingredient(db: Session, ingredient_id: int, data: schemas.IngredientUpdate):
-    ingredient = db.query(models.Ingredient).filter(models.Ingredient.id == ingredient_id).first()
-    if not ingredient:
-        raise HTTPException(status_code=404, detail="Ingredient not found")
-
-    ingredient.name = data.name
-    ingredient.default_shelf_life_days = data.default_shelf_life_days
-    db.commit()
-    db.refresh(ingredient)
-    return ingredient
-
-def delete_ingredient(db: Session, ingredient_id: int):
-    ingredient = db.query(models.Ingredient).filter(models.Ingredient.id == ingredient_id).first()
-    if not ingredient:
-        raise HTTPException(status_code=404, detail="Ingredient not found")
-
-    db.delete(ingredient)
-    db.commit()
-    return ingredient
-
 def update_user_ingredient(
     db: Session,
     user_id: int,
@@ -233,3 +214,83 @@ def delete_user_ingredient(db: Session, user_id: int, ingredient_id: int):
     db.delete(ui)
     db.commit()
     return {"message": "Ingredient removed from fridge"}
+
+# ---- Recipes ----
+def add_ingredient_to_recipe(
+    db: Session,
+    recipe_id: UUID,
+    ingredient_id: int,
+    amount: str | None = None,
+):
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if not ingredient:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+
+    exists = (
+        db.query(RecipeIngredient)
+        .filter(
+            RecipeIngredient.recipe_id == recipe_id,
+            RecipeIngredient.ingredient_id == ingredient_id,
+        )
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=409, detail="Ingredient already in recipe")
+
+    recipe_ingredient = RecipeIngredient(
+        recipe_id=recipe_id,
+        ingredient_id=ingredient_id,
+        amount=amount,
+    )
+
+    db.add(recipe_ingredient)
+    db.commit()
+    db.refresh(recipe_ingredient)
+
+    return recipe_ingredient
+
+def get_recipe(db: Session, recipe_id: UUID):
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
+
+def get_recipes(db: Session):
+    return db.query(Recipe).all()
+
+def create_recipe(db: Session, data: schemas.RecipeCreate):
+    existing = db.query(Recipe).filter(Recipe.name == data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Recipe already exists")
+
+    recipe = Recipe(
+        name=data.name,
+        description=data.description,
+        instructions=data.instructions,
+        external_url=data.external_url,
+    )
+
+    db.add(recipe)
+    db.commit()
+    db.refresh(recipe)
+    return recipe
+
+def update_recipe(db: Session, recipe_id: UUID, data: schemas.RecipeUpdate):
+    recipe = get_recipe(db, recipe_id)
+
+    for field, value in data.dict(exclude_unset=True).items():
+        setattr(recipe, field, value)
+
+    db.commit()
+    db.refresh(recipe)
+    return recipe
+
+def delete_recipe(db: Session, recipe_id: UUID):
+    recipe = get_recipe(db, recipe_id)
+    db.delete(recipe)
+    db.commit()
+    return True
