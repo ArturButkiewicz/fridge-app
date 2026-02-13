@@ -272,6 +272,7 @@ def create_recipe(db: Session, data: schemas.RecipeCreate):
         description=data.description,
         instructions=data.instructions,
         external_url=data.external_url,
+        recipe_type=data.recipe_type,
     )
 
     db.add(recipe)
@@ -292,5 +293,29 @@ def update_recipe(db: Session, recipe_id: UUID, data: schemas.RecipeUpdate):
 def delete_recipe(db: Session, recipe_id: UUID):
     recipe = get_recipe(db, recipe_id)
     db.delete(recipe)
+    db.commit()
+    return True
+
+def remove_ingredient_from_recipe(
+    db: Session,
+    recipe_id: UUID,
+    ingredient_id: int,
+):
+    relation = (
+        db.query(RecipeIngredient)
+        .filter(
+            RecipeIngredient.recipe_id == recipe_id,
+            RecipeIngredient.ingredient_id == ingredient_id,
+        )
+        .first()
+    )
+
+    if not relation:
+        raise HTTPException(
+            status_code=404,
+            detail="Ingredient not found in recipe"
+        )
+
+    db.delete(relation)
     db.commit()
     return True

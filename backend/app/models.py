@@ -123,6 +123,11 @@ class RecipeIngredient(Base):
     recipe = relationship("Recipe", back_populates="recipe_ingredients")
     ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
 
+    @property
+    def ingredient_name(self):
+        return self.ingredient.name if self.ingredient else None
+
+
     def __repr__(self):
         return (
             f"<RecipeIngredient recipe_id={self.recipe_id} "

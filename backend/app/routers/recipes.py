@@ -65,3 +65,37 @@ def update_recipe(
 @router.delete("/{recipe_id}", status_code=204)
 def delete_recipe(recipe_id: UUID, db: Session = Depends(get_db)):
     crud.delete_recipe(db, recipe_id)
+
+@router.post("/{recipe_id}/ingredients", response_model=schemas.RecipeIngredientOut)
+def add_ingredient_to_recipe(
+    recipe_id: UUID,
+    data: schemas.RecipeIngredientCreate,
+    db: Session = Depends(get_db),
+):
+    recipe_ingredient = crud.add_ingredient_to_recipe(
+        db,
+        recipe_id=recipe_id,
+        ingredient_id=data.ingredient_id,
+        amount=data.amount,
+    )
+
+    return schemas.RecipeIngredientOut(
+        ingredient_id=recipe_ingredient.ingredient_id,
+        ingredient_name=recipe_ingredient.ingredient.name,
+        amount=recipe_ingredient.amount,
+    )
+
+@router.delete(
+    "/{recipe_id}/ingredients/{ingredient_id}",
+    status_code=204
+)
+def remove_ingredient_from_recipe(
+    recipe_id: UUID,
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+):
+    crud.remove_ingredient_from_recipe(
+        db,
+        recipe_id=recipe_id,
+        ingredient_id=ingredient_id,
+    )
