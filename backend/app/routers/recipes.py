@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.database import get_db
+from app.services.recipe_service import suggest_recipes_for_user
 from app import crud, schemas, models
 
 router = APIRouter(
@@ -12,28 +13,7 @@ router = APIRouter(
 
 @router.get("/suggest")
 def suggest_recipes(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    recipes = db.query(models.Recipe).all()
-    result = []
-
-    user_ings = {ui.ingredient.name for ui in user.ingredients}
-
-    for recipe in recipes:
-        recipe_ings = [ri.ingredient.name for ri in recipe.ingredients]
-        missing = [ing for ing in recipe_ings if ing not in user_ings]
-
-        result.append({
-            "id": recipe.id,
-            "name": recipe.name,
-            "can_make": len(missing) == 0,
-            "missing_ingredients": missing,
-            "used_ingredients": recipe_ings,
-        })
-
-    return result
+    return suggest_recipes_for_user(db, user_id)
 
 @router.post("/", response_model=schemas.RecipeOut)
 def create_recipe(
